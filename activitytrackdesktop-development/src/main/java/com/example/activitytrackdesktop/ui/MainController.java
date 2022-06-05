@@ -24,6 +24,8 @@ import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.sql.Time;
 import java.sql.Date;
 import java.text.SimpleDateFormat;
@@ -327,7 +329,7 @@ public class MainController extends JFrame {
                 }
             }
         };
-        sessionPartTimer.scheduleAtFixedRate(sessionPartTask, sessionPartRate * 1000, sessionPartRate * 1000);
+        sessionPartTimer.scheduleAtFixedRate(sessionPartTask, 60 * 1000, 60 * 1000);
 
         int screenshotRate = currentProjectService.getCurrentProject().getScreenshotInterval();
         screenshotTask = new TimerTask() {
@@ -355,7 +357,13 @@ public class MainController extends JFrame {
                                 String screenName = screenshot.getUser() + "_" + screenshot.getProject() + "_" + screenshot.getSession().getId() + "_" +
                                         new SimpleDateFormat("HHmmss").format(screenshot.getTime()) + "_" + screenshot.getDate();
                                 makeScreenshot(screenName);
+                                try {
+                                    screenName = ScreenshotUploading.uploadScreenshot(screenName);
+                                } catch (IOException | GeneralSecurityException e) {
+                                    e.printStackTrace();
+                                }
                                 screenshot.setData(screenName);
+                                System.out.println(screenName);
                                 screenshot.setHash(screenshot.hashCode());
                                 screenshotService.save(screenshot);
                             }
@@ -366,7 +374,7 @@ public class MainController extends JFrame {
                 }
             }
         };
-        screenshotTimer.scheduleAtFixedRate(screenshotTask, 0, screenshotRate * 1000);
+        screenshotTimer.scheduleAtFixedRate(screenshotTask, 5 * 1000, screenshotRate * 1000);
 
         sendingTask = new TimerTask() {
             @Override
@@ -381,7 +389,7 @@ public class MainController extends JFrame {
                 }
             }
         };
-        sendingTimer.scheduleAtFixedRate(sendingTask, 30 * 60 * 1000, 30 * 60 * 1000);
+        sendingTimer.scheduleAtFixedRate(sendingTask, 2 * 60 * 1000, 2 * 60 * 1000);
     }
 
     private void stopAction(){
@@ -424,7 +432,6 @@ public class MainController extends JFrame {
             File imageFile = new File("screenshots/"  +screenName + ".jpg");
             imageFile.createNewFile();
             ImageIO.write(screenFullImage, "jpg", imageFile);
-            System.out.println(imageFile.getAbsoluteFile());
         } catch (Exception e){
             System.out.println(e.getMessage());
             JOptionPane.showInternalMessageDialog(null, e.getMessage(), "Error", TrayIcon.MessageType.ERROR.ordinal());
@@ -501,15 +508,16 @@ public class MainController extends JFrame {
     private void addSessionPart(int interval){
         sessionPart.setEndTime(Time.valueOf(LocalTime.now()));
         sessionPart.setDuration(interval);
-        // totalMouseMove = totalMouseMove / interval;
-        if(interval > 0){
-            sessionPart.setAverageActivity(Math.min(1, (float) (totalMouseMove + totalMouseClick + totalKeyClick) / interval));
-        } else {
-            if(totalMouseMove + totalMouseClick + totalKeyClick > 0){
+        if (interval > 0) {
+            totalMouseMove = totalMouseMove / interval;
+            if (totalMouseMove + totalMouseClick + totalKeyClick > interval) {
                 sessionPart.setAverageActivity(1);
-            }else {
-                sessionPart.setAverageActivity(0);
+            } else {
+                sessionPart.setAverageActivity((float) ((totalMouseMove + totalMouseClick + totalKeyClick) * 1.0 / interval));
             }
+        }
+        else {
+            sessionPart.setAverageActivity(0);
         }
         sessionPart.setKeyClick(totalKeyClick);
         totalKeyClick = 0;
